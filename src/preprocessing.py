@@ -60,7 +60,7 @@ def load_data(data_paths: dict) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
     return pred, events, out_path
 
 
-def normalize_schema(pred: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def normalize_data(pred: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Ensure required columns and standardize date fields."""
     pred = pred.copy()
     events = events.copy()
@@ -203,7 +203,7 @@ def create_df_arrests(pred_with_feats: pd.DataFrame, events: pd.DataFrame, out_p
 
 def run_preprocessing(data_paths: dict) -> pd.DataFrame:
     pred, events, out_path = load_data(data_paths)
-    pred, events = normalize_schema(pred, events)
+    pred, events = normalize_data(pred, events)
     events = add_is_felony_flag(events)
     pred = create_features(pred, events)
     report_metrics(pred)

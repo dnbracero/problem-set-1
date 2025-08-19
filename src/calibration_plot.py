@@ -15,8 +15,11 @@ Do both metrics agree that one model is more accurate than the other? Print this
 # Import any further packages you may need for PART 5
 from sklearn.calibration import calibration_curve
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+from pathlib import Path
 
+# Calibration plot function 
 # Calibration plot function 
 def calibration_plot(y_true, y_prob, n_bins=10):
     """
@@ -30,16 +33,52 @@ def calibration_plot(y_true, y_prob, n_bins=10):
     Returns:
         None
     """
-    #Calculate calibration values
+    # Calculate calibration values
+    # sklearn returns (prob_true, prob_pred); we keep the original variable names below.
     bin_means, prob_true = calibration_curve(y_true, y_prob, n_bins=n_bins)
-    
-    #Create the Seaborn plot
+
+    # Create the Seaborn plot
     sns.set(style="whitegrid")
     plt.plot([0, 1], [0, 1], "k--")
     plt.plot(prob_true, bin_means, marker='o', label="Model")
-    
+
     plt.xlabel("Mean Predicted Probability")
     plt.ylabel("Fraction of Positives")
     plt.title("Calibration Plot")
     plt.legend(loc="best")
     plt.show()
+
+
+def expected_calibration_error(y_true, y_prob, n_bins=5):
+    """
+    Expected Calibration Error (uniform-width bins).
+    Lower is better (more calibrated).
+
+    Returns:
+        float
+    """
+    y_true = np.asarray(y_true).astype(float)
+    y_prob = np.asarray(y_prob).astype(float)
+
+    if y_true.size == 0:
+        return float("nan")
+
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    idx = np.digitize(y_prob, edges, right=True) - 1
+    idx = np.clip(idx, 0, n_bins - 1)
+
+    N = y_true.shape[0]
+    ece = 0.0
+    for b in range(n_bins):
+        mask = idx == b
+        n_b = int(mask.sum())
+        if n_b == 0:
+            continue
+        conf_b = float(y_prob[mask].mean())
+        acc_b = float(y_true[mask].mean())
+        ece += abs(acc_b - conf_b) * (n_b / N)
+    return float(ece)
+
+
+if __name__ == "__main__":
+    raise SystemExit("Import and call from main.py")
