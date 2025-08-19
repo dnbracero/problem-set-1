@@ -22,4 +22,7 @@ from sklearn.linear_model import LogisticRegression as lr
 
 # Your code here
 
+def run_logistic_regression():
 
+if __name__ == "__main__":
+    run_logistic_regression()

@@ -16,3 +16,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.model_selection import StratifiedKFold as KFold_strat
 from sklearn.tree import DecisionTreeClassifier as DTC
+
+def run_decision_tree():
+
+if __name__ == "__main__":
+    run_decision_tree()

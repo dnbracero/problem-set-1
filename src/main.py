@@ -5,9 +5,9 @@ You will run this problem set from main.py, so set things up accordingly
 import pandas as pd
 import etl
 import preprocessing
-import logistic_regression
-import decision_tree
-import calibration_plot
+# import logistic_regression
+# import decision_tree
+# import calibration_plot
 
 
 # Call functions / instanciate objects from the .py files
@@ -20,6 +20,8 @@ def main():
         print(f' - {name}: {path}')
 
     # PART 2: Call functions/instanciate objects from preprocessing
+    df_arrests = preprocessing.run_preprocessing(data_paths)
+    print('Preprocessing complete.')
 
     # PART 3: Call functions/instanciate objects from logistic_regression
 
