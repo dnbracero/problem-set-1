@@ -3,6 +3,7 @@ You will run this problem set from main.py, so set things up accordingly
 '''
 
 import pandas as pd
+import numpy as np
 import etl
 import preprocessing
 import logistic_regression
