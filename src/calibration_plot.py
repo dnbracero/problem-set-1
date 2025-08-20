@@ -19,51 +19,77 @@ import numpy as np
 import seaborn as sns
 from pathlib import Path
 
-# Calibration plot function 
+PLOT_DIR = Path('plot')
+
 # Calibration plot function 
 def calibration_plot(y_true, y_prob, n_bins=10):
     """
     Create a calibration plot with a 45-degree dashed line.
 
-    Parameters:
-        y_true (array-like): True binary labels (0 or 1).
-        y_prob (array-like): Predicted probabilities for the positive class.
-        n_bins (int): Number of bins to divide the data for calibration.
+    Parameters
+    ----------
+    y_true : array-like
+        True binary labels (0 or 1).
+    y_prob : array-like
+        Predicted probabilities for the positive class.
+    n_bins : int, default=10
+        Number of bins to divide the data for calibration.
 
-    Returns:
-        None
+    Returns
+    -------
+    None
     """
     # Calculate calibration values
-    # sklearn returns (prob_true, prob_pred); we keep the original variable names below.
+    # Note: sklearn returns (prob_true, prob_pred).
     bin_means, prob_true = calibration_curve(y_true, y_prob, n_bins=n_bins)
 
-    # Create the Seaborn plot
     sns.set(style="whitegrid")
-    plt.plot([0, 1], [0, 1], "k--")
-    plt.plot(prob_true, bin_means, marker='o', label="Model")
+    plt.plot([0, 1], [0, 1], "k--", label="Perfectly calibrated")
+    plt.plot(prob_true, bin_means, marker="o", label="Model")
 
     plt.xlabel("Mean Predicted Probability")
     plt.ylabel("Fraction of Positives")
     plt.title("Calibration Plot")
     plt.legend(loc="best")
+
+    # Save plot pngs in plot/
+    out_dir = PLOT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "calibration_plot.png"
+    i = 2
+    while out_path.exists():
+        out_path = out_dir / f"calibration_plot-{i}.png"
+        i += 1
+    plt.gcf().savefig(out_path, dpi=300, bbox_inches="tight")
+    print(f"Saved calibration plot to: {out_path}")
+
     plt.show()
 
 
 def expected_calibration_error(y_true, y_prob, n_bins=5):
     """
-    Expected Calibration Error (uniform-width bins).
-    Lower is better (more calibrated).
+    Expected Calibration Error (uniform-width bins). Lower is better (more calibrated).
 
-    Returns:
-        float
+    Parameters
+    ----------
+    y_true : array-like
+    y_prob : array-like
+    n_bins : int, default=5
+
+    Returns
+    -------
+    float
+        ECE score. NaN if y_true is empty.
     """
-    y_true = np.asarray(y_true).astype(float)
-    y_prob = np.asarray(y_prob).astype(float)
+    y_true = np.asarray(y_true, dtype=float)
+    y_prob = np.asarray(y_prob, dtype=float)
 
     if y_true.size == 0:
         return float("nan")
 
+    # Uniform-width bins from 0 to 1
     edges = np.linspace(0.0, 1.0, n_bins + 1)
+    # Digitize with right-inclusive bins to align with many plotting conventions
     idx = np.digitize(y_prob, edges, right=True) - 1
     idx = np.clip(idx, 0, n_bins - 1)
 
@@ -71,12 +97,13 @@ def expected_calibration_error(y_true, y_prob, n_bins=5):
     ece = 0.0
     for b in range(n_bins):
         mask = idx == b
-        n_b = int(mask.sum())
+        n_b = int(np.sum(mask))
         if n_b == 0:
             continue
-        conf_b = float(y_prob[mask].mean())
-        acc_b = float(y_true[mask].mean())
+        conf_b = float(np.mean(y_prob[mask]))
+        acc_b = float(np.mean(y_true[mask]))
         ece += abs(acc_b - conf_b) * (n_b / N)
+
     return float(ece)
 
 

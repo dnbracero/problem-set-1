@@ -23,12 +23,11 @@ from pathlib import Path
 
 # Your code here
 
-# CONSTANTS
-# ---- Configuration ----
+# constants
 RANDOM_STATE: int = 414
 TEST_SIZE: float = 0.30
 
-# Exact name requested in the spec
+# feature names
 features = ["num_fel_arrests_last_year", "current_charge_felony"]
 TARGET = "y"
 
@@ -38,7 +37,13 @@ TEST_OUT = DATA_DIR / "df_arrests_test_lr.csv"
 
 
 def validate_inputs(df_arrests: pd.DataFrame) -> None:
-    """Ensure that required columns are present."""
+    """
+    Ensure that required columns are present.
+
+    Parameters
+    ----------
+    df_arrests : pd.DataFrame
+    """
     required = set(features + [TARGET])
     missing = required.difference(df_arrests.columns)
     if missing:
@@ -46,7 +51,17 @@ def validate_inputs(df_arrests: pd.DataFrame) -> None:
 
 
 def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Select and clean feature columns: numeric coercion and NA fill."""
+    """
+    Select and clean feature columns: numeric coercion and NA fill.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+
+    Returns
+    -------
+    pd.DataFrame
+    """
     X = df[features].copy()
     for col in features:
         X[col] = pd.to_numeric(X[col], errors="coerce")
@@ -54,7 +69,17 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepare_target(df: pd.DataFrame) -> pd.Series:
-    """Prepare binary target (coerce to numeric)."""
+    """
+    Prepare binary target (coerce to numeric).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+
+    Returns
+    -------
+    pd.Series
+    """
     y = pd.to_numeric(df[TARGET], errors="coerce")
     return y
 
@@ -63,6 +88,14 @@ def split_data(df_arrests: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Stratified train/test split (by y) and return full-row DataFrames.
     Drops rows where y is NA before splitting.
+
+    Parameters
+    ----------
+    df_arrests : pd.DataFrame
+
+    Returns
+    -------
+    (train_df, test_df) : tuple[pd.DataFrame, pd.DataFrame]
     """
     df = df_arrests[df_arrests[TARGET].notna()].copy()
     y = prepare_target(df)
@@ -78,7 +111,13 @@ def split_data(df_arrests: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def build_lr_model() -> lr:
-    """Create the base Logistic Regression model."""
+    """
+    Create the base Logistic Regression model.
+
+    Returns
+    -------
+    sklearn.linear_model.LogisticRegression
+    """
     return lr(
         penalty="l2",
         solver="lbfgs",
@@ -90,7 +129,16 @@ def build_lr_model() -> lr:
 def regularization_interpretation(best_c: float, grid: list[float]) -> str:
     """
     Interpret C: smaller C -> stronger regularization.
-    Returns: 'most regularization', 'least regularization', or 'in the middle'
+
+    Parameters
+    ----------
+    best_c : float
+    grid : list[float]
+
+    Returns
+    -------
+    str
+        'most regularization', 'least regularization', or 'in the middle'
     """
     smallest, largest = min(grid), max(grid)
     if best_c == smallest:
@@ -114,21 +162,20 @@ def run_logistic_regression(
 
     Returns
     -------
-    (df_arrests_train, df_arrests_test_with_pred, gs_cv)
+    (df_arrests_train, df_arrests_test_with_pred, gs_cv) : tuple[pd.DataFrame, pd.DataFrame, GridSearchCV]
     """
-    # Step 1: Validate inputs
+    # Validate inputs
     validate_inputs(df_arrests)
 
-    # Step 2: Split
+    # Split
     df_arrests_train, df_arrests_test = split_data(df_arrests)
     X_train = prepare_features(df_arrests_train)
     y_train = prepare_target(df_arrests_train)
 
-    # Step 3: Create param grid and model
+    # Grid + model
     param_grid = {"C": [0.01, 0.1, 1.0]}
     lr_model = build_lr_model()
 
-    # Step 4: GridSearchCV with 5-fold stratified CV
     cv = KFold_strat(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     gs_cv = GridSearchCV(
         estimator=lr_model,
@@ -139,21 +186,20 @@ def run_logistic_regression(
     )
     gs_cv.fit(X_train, y_train)
 
-    # Step 5: Required prints
+    # Required prints
     best_c = float(gs_cv.best_params_["C"])
     interpretation = regularization_interpretation(best_c, param_grid["C"])
-
     print("What was the optimal value for C?")
     print(f"Answer: {best_c}")
     print("Did it have the most or least regularization? Or in the middle?")
     print(f"Answer: {interpretation}")
 
-    # Step 6: Predict for the test set (P(y=1))
+    # Predict for the test set (P(y=1))
     X_test = prepare_features(df_arrests_test)
     df_arrests_test = df_arrests_test.copy()
     df_arrests_test["pred_lr"] = gs_cv.predict_proba(X_test)[:, 1]
 
-    # Step 7: Save outputs (and return them)
+    # Persist
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     df_arrests_train.to_csv(TRAIN_OUT, index=False)
     df_arrests_test.to_csv(TEST_OUT, index=False)

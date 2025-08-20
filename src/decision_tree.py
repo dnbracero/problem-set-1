@@ -18,9 +18,8 @@ from sklearn.model_selection import StratifiedKFold as KFold_strat
 from sklearn.tree import DecisionTreeClassifier as DTC
 from pathlib import Path
 
-# CONSTANTS
-# ---- Configuration ----
-RANDOM_STATE = 414
+# constants
+RANDOM_STATE: int = 414
 features = ["num_fel_arrests_last_year", "current_charge_felony"]
 TARGET = "y"
 
@@ -32,39 +31,80 @@ TRAIN_OUT = DATA_DIR / "df_arrests_train_dt.csv"
 TEST_OUT = DATA_DIR / "df_arrests_test_dt.csv"
 
 
-def validate_inputs(df):
-    """Ensure required columns exist in the provided DataFrame."""
+def validate_inputs(df: pd.DataFrame) -> None:
+    """
+    Ensure required columns exist in the provided DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    """
     required = set(features + [TARGET])
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"Input DataFrame is missing required columns: {sorted(missing)}")
 
 
-def prepare_features(df):
-    """Select and coerce feature columns to numeric; fill NAs with 0."""
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Select and coerce feature columns to numeric; fill NAs with 0.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+
+    Returns
+    -------
+    pd.DataFrame
+    """
     X = df[features].copy()
     for col in features:
         X[col] = pd.to_numeric(X[col], errors="coerce")
     return X.fillna(0)
 
 
-def prepare_target(df):
-    """Coerce target to numeric (0/1)."""
+def prepare_target(df: pd.DataFrame) -> pd.Series:
+    """
+    Coerce target to numeric (0/1).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+
+    Returns
+    -------
+    pd.Series
+    """
     return pd.to_numeric(df[TARGET], errors="coerce")
 
 
-def build_dt_model():
-    """Create a base Decision Tree classifier."""
+def build_dt_model() -> DTC:
+    """
+    Create a base Decision Tree classifier.
+
+    Returns
+    -------
+    sklearn.tree.DecisionTreeClassifier
+    """
     return DTC(
         criterion="gini",
         random_state=RANDOM_STATE,
     )
 
 
-def regularization_interpretation_for_depth(best_depth, grid):
+def regularization_interpretation_for_depth(best_depth: int, grid: list[int]) -> str:
     """
     Interpret tree depth in terms of regularization.
-    Smaller depth -> stronger regularization; larger depth -> weaker regularization.
+
+    Parameters
+    ----------
+    best_depth : int
+    grid : list[int]
+
+    Returns
+    -------
+    str
+        Smaller depth -> 'most regularization'; larger depth -> 'least regularization'.
     """
     smallest, largest = min(grid), max(grid)
     if best_depth == smallest:
@@ -74,9 +114,21 @@ def regularization_interpretation_for_depth(best_depth, grid):
     return "in the middle"
 
 
-def load_lr_splits(df_arrests_train=None, df_arrests_test=None):
+def load_lr_splits(
+    df_arrests_train: pd.DataFrame | None = None,
+    df_arrests_test: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    If train/test are provided, use them. Otherwise, load the LR splits saved in PART 3.
+    If train/test DataFrames are provided, use them; otherwise load the PART 3 CSV splits.
+
+    Parameters
+    ----------
+    df_arrests_train : pd.DataFrame | None
+    df_arrests_test : pd.DataFrame | None
+
+    Returns
+    -------
+    (train_df, test_df) : tuple[pd.DataFrame, pd.DataFrame]
     """
     if df_arrests_train is not None and df_arrests_test is not None:
         return df_arrests_train.copy(), df_arrests_test.copy()
@@ -92,7 +144,10 @@ def load_lr_splits(df_arrests_train=None, df_arrests_test=None):
     return train, test
 
 
-def run_decision_tree(df_arrests_train=None, df_arrests_test=None):
+def run_decision_tree(
+    df_arrests_train: pd.DataFrame | None = None,
+    df_arrests_test: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, GridSearchCV]:
     """
     Train a Decision Tree (with max_depth grid search), predict on the test set, and return results.
 
@@ -105,12 +160,7 @@ def run_decision_tree(df_arrests_train=None, df_arrests_test=None):
 
     Returns
     -------
-    df_arrests_train : pd.DataFrame
-        Unmodified training set (for completeness/consistency with other parts).
-    df_arrests_test_with_pred : pd.DataFrame
-        Test set augmented with 'pred_dt' (P(y=1)).
-    gs_cv_dt : GridSearchCV
-        Fitted GridSearchCV object for the Decision Tree.
+    (df_arrests_train, df_arrests_test_with_pred, gs_cv_dt) : tuple[pd.DataFrame, pd.DataFrame, GridSearchCV]
     """
     # Resolve inputs
     df_train, df_test = load_lr_splits(df_arrests_train, df_arrests_test)
@@ -124,7 +174,7 @@ def run_decision_tree(df_arrests_train=None, df_arrests_test=None):
     y_train = prepare_target(df_train)
     X_test = prepare_features(df_test)
 
-    # Parameter grid: three depths
+    # Parameter grid: three depths (positive integers)
     param_grid_dt = {"max_depth": [2, 4, 6]}
 
     # Model + CV
