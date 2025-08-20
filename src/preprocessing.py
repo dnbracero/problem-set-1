@@ -23,35 +23,32 @@ from pathlib import Path
 
 # Your code here
 
-"""
-Expected keys in `data_paths` (from ETL):
-  - data_paths["pred_universe_raw"] -> path to pred_universe_raw.csv
-  - data_paths["arrest_events_raw"] -> path to arrest_events_raw.csv
-Optional:
-  - data_paths["df_arrests"]        -> output CSV path (default: data/df_arrests.csv)
-
-Features/label created on the prediction universe:
-  * y: 1 if felony rearrest in (current_date + 1 .. +365 days)
-  * current_charge_felony: 1 if the current arrest is a felony (same-day heuristic or by arrest_id)
-  * num_fel_arrests_last_year: felony arrests in (current_date -365 .. -1 days)
-
-Outputs:
-  - Prints required answers + pred_universe.head()
-  - Full outer join on person_id to produce df_arrests
-  - Saves df_arrests to CSV and returns the DataFrame
-"""
-
-
 def load_data(data_paths: dict) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
-    """Resolve file paths from data_paths and load the CSVs."""
-    def _get(d: dict, keys: list[str]) -> str:
+    """
+    Resolve file paths from ETL output and load the CSVs.
+
+    Parameters
+    ----------
+    data_paths : dict
+        Expected keys:
+          - 'pred_universe_raw'
+          - 'arrest_events_raw'
+        Optional:
+          - 'df_arrests' (output path override)
+
+    Returns
+    -------
+    (pred, events, out_path) : tuple[pd.DataFrame, pd.DataFrame, Path]
+    """
+    def get_path(d: dict, keys: list[str]) -> str:
         for k in keys:
             if k in d and d[k]:
                 return d[k]
         raise KeyError(f"Expected one of {keys} in data_paths. Got keys: {list(d.keys())}")
 
-    pred_path = _get(data_paths, ["pred_universe_raw", "pred_universe", "pred"])
-    events_path = _get(data_paths, ["arrest_events_raw", "arrest_events", "arrests"])
+    pred_path = get_path(data_paths, ["pred_universe_raw", "pred_universe", "pred"])
+    events_path = get_path(data_paths, ["arrest_events_raw", "arrest_events", "arrests"])
+
     out_path = Path(data_paths.get("df_arrests", "data/df_arrests.csv"))
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,11 +58,22 @@ def load_data(data_paths: dict) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
 
 
 def normalize_data(pred: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Ensure required columns and standardize date fields."""
+    """
+    Ensure required columns exist and standardize date fields.
+
+    Parameters
+    ----------
+    pred : pd.DataFrame
+    events : pd.DataFrame
+
+    Returns
+    -------
+    (pred_norm, events_norm) : tuple[pd.DataFrame, pd.DataFrame]
+    """
     pred = pred.copy()
     events = events.copy()
 
-    # Ensure date columns
+    # Dates
     if "arrest_date_univ" not in pred.columns:
         if "arrest_date" in pred.columns:
             pred["arrest_date_univ"] = pred["arrest_date"]
@@ -80,7 +88,7 @@ def normalize_data(pred: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFra
             raise KeyError("arrest_events is missing 'arrest_date_event' (or fallback 'arrest_date').")
     events["arrest_date_event"] = pd.to_datetime(events["arrest_date_event"])
 
-    # Required key
+    # Keys
     if "person_id" not in pred.columns or "person_id" not in events.columns:
         raise KeyError("Both pred_universe and arrest_events must contain 'person_id'.")
 
@@ -93,8 +101,15 @@ def normalize_data(pred: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFra
 
 def add_is_felony_flag(events: pd.DataFrame) -> pd.DataFrame:
     """
-    Add a boolean 'is_felony' to events using common severity columns.
-    Accept values like 'felony' or 'F' (case-insensitive). Falls back to False.
+    Add boolean 'is_felony' based on common severity columns.
+
+    Parameters
+    ----------
+    events : pd.DataFrame
+
+    Returns
+    -------
+    pd.DataFrame
     """
     events = events.copy()
     felony_col = None
@@ -114,11 +129,12 @@ def add_is_felony_flag(events: pd.DataFrame) -> pd.DataFrame:
 
 def create_features(pred: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """
-    Create:
-      - current_charge_felony
-      - num_fel_arrests_last_year
-      - y (future felony rearrest)
-    Returns a new pred DataFrame with these columns.
+    Create required features on the prediction universe.
+
+    Returns
+    -------
+    pd.DataFrame
+        Copy of pred with: current_charge_felony, num_fel_arrests_last_year, y
     """
     pr = pred.copy()
     ev = events.copy()
@@ -132,15 +148,11 @@ def create_features(pred: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
         ev["_event_day"] = ev["arrest_date_event"].dt.date
         pr["_current_day"] = pr["arrest_date_univ"].dt.date
         same_day_felony = (
-            ev.groupby(["person_id", "_event_day"])["is_felony"]
-            .any()
-            .rename("same_day_felony")
+            ev.groupby(["person_id", "_event_day"])["is_felony"].any().rename("same_day_felony")
         )
         idx = pd.MultiIndex.from_frame(pr[["person_id", "_current_day"]])
         pr["current_charge_felony"] = (
-            pd.Series(same_day_felony.reindex(idx).values, index=pr.index)
-            .fillna(False)
-            .astype(int)
+            pd.Series(same_day_felony.reindex(idx).values, index=pr.index).fillna(False).astype(int)
         )
 
     # Build pairs for windowed counts
@@ -150,7 +162,7 @@ def create_features(pred: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
         how="left",
     )
 
-    # (B) num_fel_arrests_last_year: [current_date -365, current_date -1]
+    # (B) num_fel_arrests_last_year: [current -365, current -1]
     past_mask = (
         pairs["is_felony"].fillna(False)
         & (pairs["arrest_date_event"] >= pairs["arrest_date_univ"] - pd.Timedelta(days=365))
@@ -159,7 +171,7 @@ def create_features(pred: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     past_counts = past_mask.groupby(pairs["row_id"]).sum().astype(int)
     pr["num_fel_arrests_last_year"] = pr["row_id"].map(past_counts).fillna(0).astype(int)
 
-    # (C) y label (future window): [current_date +1, current_date +365]
+    # (C) y label (future window): [current +1, current +365]
     future_mask = (
         pairs["is_felony"].fillna(False)
         & (pairs["arrest_date_event"] >= pairs["arrest_date_univ"] + pd.Timedelta(days=1))
@@ -172,7 +184,9 @@ def create_features(pred: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
 
 
 def report_metrics(pred_with_feats: pd.DataFrame) -> None:
-    """Print required answers + explicit mean call + head()."""
+    """
+    Print required summary metrics and a sample head for inspection.
+    """
     print("What share of arrestees in the `df_arrests` table were rearrested for a felony crime in the next year?")
     print(f"Answer: {pred_with_feats['y'].mean():.3%}")
 
@@ -190,7 +204,13 @@ def report_metrics(pred_with_feats: pd.DataFrame) -> None:
 
 
 def create_df_arrests(pred_with_feats: pd.DataFrame, events: pd.DataFrame, out_path: Path) -> pd.DataFrame:
-    """Full outer join on person_id, save, and return df_arrests."""
+    """
+    Full outer join on person_id, save, and return df_arrests.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
     df_arrests = pred_with_feats.merge(
         events,
         on="person_id",
@@ -202,6 +222,14 @@ def create_df_arrests(pred_with_feats: pd.DataFrame, events: pd.DataFrame, out_p
 
 
 def run_preprocessing(data_paths: dict) -> pd.DataFrame:
+    """
+    Orchestrate preprocessing: load, normalize, feature-create, report, and persist.
+
+    Returns
+    -------
+    pd.DataFrame
+        The `df_arrests` table saved to disk.
+    """
     pred, events, out_path = load_data(data_paths)
     pred, events = normalize_data(pred, events)
     events = add_is_felony_flag(events)
