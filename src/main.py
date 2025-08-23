@@ -38,7 +38,7 @@ def main():
     print(f"Best params from GridSearchCV (DT): {gs_cv_dt.best_params_}")
 
     # PART 5: Call functions/instanciate objects from calibration_plot
-     # Create calibration curves for LR and DT with n_bins=5
+    # Create calibration curves for LR and DT with n_bins=5
     calibration_plot.calibration_plot(
         y_true=df_arrests_test["y"].values,
         y_prob=df_arrests_test["pred_lr"].values,
